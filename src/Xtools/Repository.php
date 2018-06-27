@@ -6,17 +6,18 @@
 namespace Xtools;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DBALException;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Mediawiki\Api\MediawikiApi;
 use Psr\Cache\CacheItemPoolInterface;
+use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\Stopwatch\Stopwatch;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
-use GuzzleHttp\Promise\Promise;
 use DateInterval;
 
 /**
@@ -57,7 +58,7 @@ abstract class Repository
 
     /**
      * Set the DI container.
-     * @param Container $container
+     * @param Container|ContainerInterface $container
      */
     public function setContainer(Container $container)
     {
@@ -79,7 +80,7 @@ abstract class Repository
 
     /**
      * Get various metadata about the current tool being used, which will
-     * be used in logging for diagnosting any issues.
+     * be used in logging for diagnosing any issues.
      * @return array
      *
      * There is no request stack in the tests.
@@ -87,6 +88,7 @@ abstract class Repository
      */
     protected function getCurrentRequestMetadata()
     {
+        /** @var \Symfony\Component\HttpFoundation\Request $request */
         $request = $this->container->get('request_stack')->getCurrentRequest();
 
         if (null === $request) {
@@ -257,7 +259,7 @@ abstract class Repository
 
     /**
      * Get a cache-friendly string given an argument.
-     * @param  mixed $arg
+     * @param mixed $arg
      * @return string
      */
     private function getCacheKeyFromArg($arg)
@@ -276,7 +278,7 @@ abstract class Repository
     /**
      * Set the cache with given options.
      * @param string $cacheKey
-     * @param mixed  $value
+     * @param mixed $value
      * @param string $duration Valid DateInterval string.
      * @return mixed The given $value.
      */
@@ -326,6 +328,7 @@ abstract class Repository
      * @param int|null $timeout Maximum statement time in seconds. null will use the
      *   default specified by the app.query_timeout config parameter.
      * @return \Doctrine\DBAL\Driver\Statement
+     * @throws DBALException
      * @codeCoverageIgnore
      */
     public function executeProjectsQuery($sql, $params = [], $timeout = null)
@@ -337,7 +340,7 @@ abstract class Repository
             $sql = "SET STATEMENT max_statement_time = $timeout FOR\n".$sql;
             return $this->getProjectsConnection()->executeQuery($sql, $params);
         } catch (DriverException $e) {
-            return $this->handleDriverError($e, $timeout);
+            $this->handleDriverError($e, $timeout);
         }
     }
 
@@ -347,6 +350,7 @@ abstract class Repository
      * @param int $timeout Maximum statement time in seconds. null will use the
      *   default specified by the app.query_timeout config parameter.
      * @return \Doctrine\DBAL\Driver\Statement
+     * @throws DBALException
      * @codeCoverageIgnore
      */
     public function executeQueryBuilder(QueryBuilder $qb, $timeout = null)
@@ -358,7 +362,7 @@ abstract class Repository
             $sql = "SET STATEMENT max_statement_time = $timeout FOR\n".$qb->getSQL();
             return $qb->getConnection()->executeQuery($sql, $qb->getParameters(), $qb->getParameterTypes());
         } catch (DriverException $e) {
-            return $this->handleDriverError($e, $timeout);
+            $this->handleDriverError($e, $timeout);
         }
     }
 
